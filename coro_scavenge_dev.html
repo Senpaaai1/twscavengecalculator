@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Coro's Better Than Gemini's Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+/* ── Hardcoded colour tokens (no CSS vars in grids — Chrome local file bug) ── */
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { background-color:#1a1008; background-image:radial-gradient(ellipse at 20% 20%,rgba(139,26,26,0.15) 0%,transparent 50%),radial-gradient(ellipse at 80% 80%,rgba(93,78,55,0.2) 0%,transparent 50%); min-height:100vh; font-family:'Crimson Text',serif; color:#2c1a0e; padding:12px; font-size:14px; }
+
+/* View toggle — split pill switch */
+#viewToggle { position:fixed; top:12px; right:12px; z-index:200; background:#2c1a0e; border:2px solid #d4b87a; border-radius:24px; padding:3px; cursor:pointer; box-shadow:0 2px 12px rgba(0,0,0,0.6); display:flex; align-items:center; gap:0; transition:all 0.2s; white-space:nowrap; width:88px; }
+#viewToggle .vt-half { flex:1; display:flex; align-items:center; justify-content:center; border-radius:18px; padding:6px 4px; font-size:15px; transition:background 0.2s; line-height:1; }
+#viewToggle .vt-pc   { border-radius:18px 4px 4px 18px; }
+#viewToggle .vt-phone{ border-radius:4px 18px 18px 4px; }
+body:not(.phone-mode) #viewToggle .vt-pc    { background:linear-gradient(180deg,#8b1a1a,#6b1212); box-shadow:0 1px 6px rgba(0,0,0,0.4); }
+body:not(.phone-mode) #viewToggle .vt-phone { background:transparent; }
+body.phone-mode #viewToggle .vt-phone { background:linear-gradient(180deg,#8b1a1a,#6b1212); box-shadow:0 1px 6px rgba(0,0,0,0.4); }
+body.phone-mode #viewToggle .vt-pc    { background:transparent; }
+
+.scroll-container { max-width:980px; margin:0 auto; background:linear-gradient(180deg,#e8d4a0 0%,#f4e4c1 4%,#f4e4c1 96%,#e8d4a0 100%); border-radius:6px; box-shadow:0 0 0 3px #d4b87a,0 0 0 6px #5d4e37,0 0 0 9px #d4b87a,0 20px 60px rgba(0,0,0,0.8); position:relative; overflow:hidden; }
+
+/* PC mode inner padding */
+.inner { padding:44px 52px; position:relative; }
+/* Phone mode inner padding */
+body.phone-mode .inner { padding:16px 14px; }
+
+.corner { position:absolute; width:50px; height:50px; opacity:0.4; pointer-events:none; }
+.corner-tl{top:12px;left:12px} .corner-tr{top:12px;right:12px;transform:scaleX(-1)} .corner-bl{bottom:12px;left:12px;transform:scaleY(-1)} .corner-br{bottom:12px;right:12px;transform:scale(-1,-1)}
+body.phone-mode .corner { width:32px; height:32px; }
+
+header { text-align:center; margin-bottom:24px; padding-bottom:16px; border-bottom:2px solid #d4b87a; padding-top:8px; }
+.subtitle-banner { font-size:9px; letter-spacing:4px; text-transform:uppercase; color:#8b1a1a; margin-bottom:6px; }
+h1 { font-family:'Cinzel',serif; font-size:clamp(15px,4vw,27px); font-weight:900; color:#2c1a0e; line-height:1.25; text-shadow:1px 1px 0 #d4b87a; margin-bottom:5px; }
+h1 em { color:#8b1a1a; font-style:normal; }
+.tagline { font-style:italic; font-size:11px; color:#5c3a1e; opacity:0.7; }
+body.phone-mode .tagline { font-size:13px; }
+
+.section-title { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#8b1a1a; margin-bottom:12px; display:flex; align-items:center; gap:10px; }
+.section-title::after { content:''; flex:1; height:1px; background:#d4b87a; }
+body.phone-mode .section-title { font-size:11px; }
+
+/* Settings — PC: side by side, Phone: stacked */
+.settings-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
+body.phone-mode .settings-row { grid-template-columns:1fr; }
+.setting-group { background:rgba(93,78,55,0.07); border:1px solid #d4b87a; border-radius:6px; padding:12px 14px; }
+.setting-group label { display:block; font-family:'Cinzel',serif; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:#5c3a1e; margin-bottom:8px; }
+.setting-group select { width:100%; background:#f4e4c1; border:1px solid #d4b87a; color:#2c1a0e; font-family:'Crimson Text',serif; font-size:14px; padding:6px 28px 6px 8px; border-radius:4px; cursor:pointer; outline:none; appearance:none; min-height:36px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235c3a1e' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; }
+body.phone-mode .setting-group select { font-size:16px; min-height:48px; padding:10px 28px 10px 12px; }
+
+/* Slot selector — PC: 4 cols, Phone: 2 cols */
+.slot-selector-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:18px; }
+body.phone-mode .slot-selector-grid { grid-template-columns:repeat(2,1fr); }
+.slot-toggle { border:2px solid #d4b87a; border-radius:6px; padding:12px 8px; background:rgba(255,255,255,0.2); cursor:pointer; text-align:center; transition:all 0.18s; position:relative; user-select:none; min-height:36px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; }
+body.phone-mode .slot-toggle { min-height:48px; }
+.slot-toggle:hover { border-color:#c9962a; background:rgba(201,150,42,0.08); }
+.slot-toggle.active { border-color:#8b1a1a; background:rgba(139,26,26,0.1); box-shadow:0 2px 10px rgba(139,26,26,0.2); }
+.slot-toggle .st-check { position:absolute; top:5px; right:6px; width:15px; height:15px; border:1.5px solid #d4b87a; border-radius:2px; background:#f4e4c1; display:flex; align-items:center; justify-content:center; font-size:9px; color:#8b1a1a; font-weight:900; }
+.slot-toggle.active .st-check { background:#8b1a1a; color:#f0c040; border-color:#8b1a1a; }
+.slot-toggle .st-icon { font-size:20px; }
+.slot-toggle .st-name { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; color:#2c1a0e; }
+body.phone-mode .slot-toggle .st-name { font-size:11px; }
+.slot-toggle.active .st-name { color:#8b1a1a; }
+.slot-toggle .st-yield { font-family:'Cinzel',serif; font-size:11px; font-weight:700; color:#c9962a; }
+.slot-toggle .st-desc { font-family:'Crimson Text',serif; font-size:10px; font-style:italic; color:#5c3a1e; line-height:1.3; }
+body.phone-mode .slot-toggle .st-desc { display:none; }
+
+/* Time limit */
+.time-limit-box { background:rgba(93,78,55,0.07); border:1px solid #d4b87a; border-radius:6px; padding:14px 16px; margin-bottom:18px; }
+.time-limit-box label.tl-head { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1.5px; text-transform:uppercase; color:#5c3a1e; display:block; margin-bottom:10px; }
+body.phone-mode .time-limit-box label.tl-head { font-size:11px; }
+.time-limit-inner { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.time-limit-inner input[type=checkbox] { width:20px; height:20px; cursor:pointer; accent-color:#8b1a1a; flex-shrink:0; }
+.time-limit-inner span { font-family:'Cinzel',serif; font-size:11px; color:#2c1a0e; }
+body.phone-mode .time-limit-inner span { font-size:13px; }
+.time-inputs { display:flex; align-items:center; gap:8px; }
+.time-inputs input[type=number] { width:64px; background:#f4e4c1; border:1px solid #d4b87a; border-radius:4px; padding:6px 8px; font-family:'Cinzel',serif; font-size:14px; color:#2c1a0e; text-align:center; outline:none; min-height:36px; }
+body.phone-mode .time-inputs input[type=number] { font-size:16px; min-height:48px; padding:10px 8px; }
+.time-inputs input[type=number]:focus { border-color:#c9962a; }
+.time-inputs label { font-family:'Crimson Text',serif; font-size:11px; color:#5c3a1e; font-style:italic; }
+#timeFields { display:none; }
+
+/* Strategy — PC: 4 cols, Phone: 2 cols */
+.strategy-row { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:20px; }
+.strat-btn { border:2px solid #d4b87a; border-radius:6px; padding:12px 8px; background:rgba(255,255,255,0.25); cursor:pointer; text-align:center; transition:all 0.18s; min-height:36px; }
+body.phone-mode .strat-btn { min-height:48px; }
+.strat-btn:hover { border-color:#c9962a; background:rgba(201,150,42,0.09); }
+.strat-btn.active { border-color:#8b1a1a; background:rgba(139,26,26,0.09); box-shadow:0 2px 12px rgba(139,26,26,0.2); }
+.strat-btn .si { font-size:22px; display:block; margin-bottom:4px; }
+.strat-btn .sn { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#2c1a0e; display:block; margin-bottom:3px; }
+body.phone-mode .strat-btn .sn { font-size:11px; }
+.strat-btn.active .sn { color:#8b1a1a; }
+.strat-btn .sd { font-family:'Crimson Text',serif; font-size:10px; font-style:italic; color:#5c3a1e; line-height:1.3; }
+body.phone-mode .strat-btn .sd { display:none; }
+
+/* Troops — PC: auto-fill 170px, Phone: 2 cols */
+.troops-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; margin-bottom:20px; }
+body.phone-mode .troops-grid { grid-template-columns:1fr; }
+.troop-card { background:rgba(255,255,255,0.3); border:1px solid #d4b87a; border-radius:6px; padding:10px 12px; }
+.troop-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.troop-icon { font-size:18px; width:24px; text-align:center; }
+.troop-name { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:0.5px; color:#2c1a0e; }
+body.phone-mode .troop-name { font-size:11px; }
+.troop-stat { font-size:10px; color:#5c3a1e; opacity:0.65; font-style:italic; }
+.troop-input-wrap { display:flex; align-items:center; border:1px solid #d4b87a; border-radius:4px; overflow:hidden; }
+.stepper-btn { background:rgba(93,78,55,0.12); border:none; color:#2c1a0e; font-size:18px; font-weight:700; cursor:pointer; width:38px; min-height:36px; display:flex; align-items:center; justify-content:center; transition:background 0.15s; flex-shrink:0; }
+body.phone-mode .stepper-btn { width:44px; min-height:48px; font-size:22px; }
+.stepper-btn:hover { background:rgba(139,26,26,0.15); color:#8b1a1a; }
+.stepper-btn:active { background:rgba(139,26,26,0.25); }
+.troop-input { flex:1; min-width:0; background:#f4e4c1; border:none; padding:6px 8px; font-family:'Cinzel',serif; font-size:14px; color:#2c1a0e; text-align:center; outline:none; min-height:36px; }
+body.phone-mode .troop-input { font-size:16px; min-height:48px; padding:10px 4px; }
+.troop-input:focus { background:#fffef8; }
+.troop-input::placeholder { color:#d4b87a; opacity:1; }
+
+.btn-calculate { display:block; width:100%; padding:14px; background:linear-gradient(180deg,#8b1a1a 0%,#6b1212 100%); color:#f0c040; font-family:'Cinzel',serif; font-size:14px; font-weight:700; letter-spacing:3px; text-transform:uppercase; border:none; border-radius:6px; cursor:pointer; transition:all 0.18s; margin-bottom:20px; box-shadow:0 4px 16px rgba(139,26,26,0.35); min-height:36px; }
+body.phone-mode .btn-calculate { font-size:16px; padding:18px; min-height:56px; }
+.btn-calculate:hover { background:linear-gradient(180deg,#a52020 0%,#7a1414 100%); transform:translateY(-1px); }
+.btn-calculate:active { transform:translateY(0); }
+.warning-box { background:rgba(139,26,26,0.07); border:1px solid #8b1a1a; border-radius:6px; padding:12px 16px; font-size:11px; color:#8b1a1a; font-style:italic; margin-bottom:16px; display:none; }
+
+/* Results */
+#results { display:none; }
+.results-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px; }
+.slot-card { background:linear-gradient(180deg,rgba(93,78,55,0.11) 0%,rgba(93,78,55,0.04) 100%); border:1px solid #d4b87a; border-top:3px solid #888; border-radius:6px; padding:12px; }
+.slot-title { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; padding-bottom:7px; border-bottom:1px solid #d4b87a; display:flex; justify-content:space-between; align-items:center; color:#8b1a1a; }
+.slot-badge { font-size:8px; padding:2px 6px; border-radius:2px; color:#f0c040; }
+.slot-troops { font-size:11px; color:#5c3a1e; margin-bottom:8px; line-height:1.9; display:flex; flex-wrap:wrap; gap:4px 10px; }
+.troop-line { display:flex; align-items:center; gap:4px; }
+.troop-icon-sm { font-size:16px; line-height:1; }
+.troop-count { font-family:'Cinzel',serif; font-size:10px; font-weight:700; color:#2c1a0e; }
+.slot-stats { border-top:1px solid #d4b87a; padding-top:7px; font-size:11px; color:#5c3a1e; }
+.stat-line { display:flex; justify-content:space-between; margin-bottom:3px; }
+.stat-val { font-family:'Cinzel',serif; font-weight:700; color:#5d4e37; }
+.stat-val.hi { color:#8b1a1a; }
+.stat-line-split { margin-bottom:1px !important; }
+.res-split-row { font-size:10px; color:#5c3a1e; opacity:0.8; margin-bottom:6px; padding-left:2px; letter-spacing:0.3px; }
+body.phone-mode .res-split-row { font-size:12px; }
+.resend-split { text-align:center; font-size:10px; color:#5c3a1e; margin-top:3px; opacity:0.85; }
+.resend-badge { margin-top:9px; padding:7px 10px; border-radius:4px; font-size:11px; font-family:'Cinzel',serif; letter-spacing:0.5px; text-align:center; background:rgba(139,26,26,0.08); border:1px solid rgba(139,26,26,0.2); color:#8b1a1a; }
+.resend-badge strong { font-size:13px; }
+.resend-badge.resend-ref { background:rgba(201,150,42,0.08); border-color:rgba(201,150,42,0.3); color:#c9962a; font-style:italic; }
+.resend-total { text-align:center; font-family:'Cinzel',serif; font-size:10px; color:#5d4e37; margin-top:4px; font-weight:700; }
+
+/* Summary */
+.summary-box { background:linear-gradient(135deg,rgba(201,150,42,0.1) 0%,rgba(139,26,26,0.07) 100%); border:1px solid #c9962a; border-radius:6px; padding:16px 18px; }
+.summary-title { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:2px; color:#c9962a; text-transform:uppercase; margin-bottom:12px; text-align:center; }
+.summary-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; text-align:center; }
+body.phone-mode .summary-stats { grid-template-columns:repeat(2,1fr); }
+.ss-label { font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#5c3a1e; margin-bottom:4px; }
+.ss-val { font-family:'Cinzel',serif; font-size:15px; font-weight:900; color:#2c1a0e; }
+.ss-val.c1{color:#5d4e37} .ss-val.c2{color:#a0785a} .ss-val.c3{color:#4a5568}
+
+/* Comparison */
+.compare-panel { margin-top:12px; border:1px solid #d4b87a; border-radius:6px; overflow:hidden; }
+.compare-title { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#5c3a1e; padding:10px 14px; background:rgba(93,78,55,0.08); border-bottom:1px solid #d4b87a; }
+.compare-row { display:flex; align-items:center; justify-content:space-between; padding:9px 14px; border-bottom:1px solid rgba(212,184,122,0.4); font-size:11px; flex-wrap:wrap; gap:6px; }
+.compare-row:last-child { border-bottom:none; }
+.compare-label { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#5c3a1e; min-width:100px; }
+.compare-diff { font-family:'Cinzel',serif; font-size:11px; font-weight:700; padding:2px 8px; border-radius:2px; }
+.compare-diff.pos{color:#166534;background:rgba(22,101,52,0.1)} .compare-diff.neg{color:#8b1a1a;background:rgba(139,26,26,0.08)} .compare-diff.neu{color:#5c3a1e;background:rgba(93,78,55,0.08)}
+.equal-time-note { font-family:'Crimson Text',serif; font-size:11px; font-style:italic; color:#5c3a1e; text-align:center; padding:8px 14px; background:rgba(201,150,42,0.06); border-top:1px solid #d4b87a; }
+
+/* Sensitivity table */
+.sensitivity-panel { margin-top:12px; border:1px solid #d4b87a; border-radius:6px; overflow:hidden; }
+.sensitivity-header { font-family:'Cinzel',serif; font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#5c3a1e; padding:10px 14px; background:rgba(93,78,55,0.08); border-bottom:1px solid #d4b87a; display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; min-height:44px; }
+body.phone-mode .sensitivity-header { font-size:11px; min-height:48px; }
+.sensitivity-header:hover { background:rgba(93,78,55,0.13); }
+.toggle-arrow { font-size:12px; transition:transform 0.2s; }
+.sens-open .toggle-arrow { transform:rotate(180deg); }
+.sensitivity-body { display:none; }
+.sensitivity-body.open { display:block; }
+.cliff-warning { background:rgba(139,26,26,0.07); border-bottom:1px solid rgba(139,26,26,0.2); padding:10px 14px; font-family:'Crimson Text',serif; font-size:11px; color:#8b1a1a; font-style:italic; line-height:1.6; }
+body.phone-mode .cliff-warning { font-size:13px; }
+.cliff-warning strong { font-family:'Cinzel',serif; font-style:normal; }
+.sens-table { width:100%; border-collapse:collapse; font-size:11px; }
+body.phone-mode .sens-table { font-size:13px; }
+.sens-table th { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px; text-transform:uppercase; color:#5c3a1e; padding:8px 10px; text-align:left; background:rgba(93,78,55,0.04); border-bottom:1px solid #d4b87a; }
+.sens-table td { padding:8px 10px; border-bottom:1px solid rgba(212,184,122,0.3); color:#2c1a0e; vertical-align:top; }
+.sens-table tr:last-child td { border-bottom:none; }
+.sens-table tr.cliff-row td { background:rgba(139,26,26,0.04); }
+.sens-table tr.best-row td { background:rgba(22,101,52,0.04); }
+.sens-val { font-family:'Cinzel',serif; font-weight:700; }
+.sens-loss { font-family:'Cinzel',serif; font-size:10px; color:#8b1a1a; font-weight:700; }
+.sens-ok   { font-family:'Cinzel',serif; font-size:10px; color:#166534; font-weight:700; }
+.sens-sends { font-size:10px; line-height:1.9; }
+.sens-sends .warn { color:#8b1a1a; font-weight:700; }
+.sens-sends .ok   { color:#5c3a1e; }
+
+.formula-note { font-family:'Crimson Text',serif; font-size:11px; font-style:italic; color:#5c3a1e; opacity:0.6; text-align:center; margin-top:10px; }
+footer { text-align:center; margin-top:20px; padding-top:14px; border-top:1px solid #d4b87a; font-size:11px; color:#5c3a1e; opacity:0.5; font-style:italic; }
+
+/* Popup */
+.popup-overlay { display:none; position:fixed; inset:0; background:rgba(20,10,4,0.72); z-index:100; align-items:center; justify-content:center; padding:16px; }
+.popup-overlay.open { display:flex; }
+.popup-box { background:linear-gradient(170deg,#f4e4c1 0%,#e8d4a0 100%); border-radius:6px; max-width:420px; width:100%; box-shadow:0 0 0 3px #d4b87a,0 0 0 5px #5d4e37,0 24px 60px rgba(0,0,0,0.7); padding:28px 22px; text-align:center; }
+.popup-icon { font-size:36px; display:block; margin-bottom:10px; }
+.popup-title { font-family:'Cinzel',serif; font-size:14px; font-weight:900; color:#8b1a1a; margin-bottom:10px; }
+.popup-body { font-family:'Crimson Text',serif; font-size:14px; color:#5c3a1e; line-height:1.6; margin-bottom:18px; }
+.popup-body strong { font-family:'Cinzel',serif; color:#2c1a0e; }
+.popup-suggestions { display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+.popup-suggestion-btn { background:rgba(93,78,55,0.08); border:1.5px solid #d4b87a; border-radius:4px; padding:12px 14px; cursor:pointer; font-family:'Crimson Text',serif; font-size:14px; color:#2c1a0e; transition:all 0.15s; text-align:left; display:flex; justify-content:space-between; align-items:center; min-height:48px; }
+.popup-suggestion-btn:hover { border-color:#c9962a; }
+.sug-label { font-family:'Cinzel',serif; font-size:10px; font-weight:700; color:#8b1a1a; letter-spacing:1px; }
+.popup-dismiss { background:linear-gradient(180deg,#8b1a1a 0%,#6b1212 100%); color:#f0c040; font-family:'Cinzel',serif; font-size:12px; font-weight:700; letter-spacing:2px; text-transform:uppercase; border:none; border-radius:4px; padding:12px 24px; cursor:pointer; min-height:48px; }
+</style>
+</head>
+<body>
+
+<button id="viewToggle" title="Switch view">
+  <span class="vt-half vt-pc">&#128421;</span>
+  <span class="vt-half vt-phone">&#128241;</span>
+</button>
+
+<div class="scroll-container">
+  <svg class="corner corner-tl" viewBox="0 0 50 50" fill="none"><path d="M4 4L20 4L4 20Z" stroke="#c9962a" stroke-width="1" fill="rgba(201,150,42,0.12)"/><line x1="4" y1="4" x2="46" y2="4" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><line x1="4" y1="4" x2="4" y2="46" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><circle cx="4" cy="4" r="2.5" fill="#c9962a" opacity="0.7"/></svg>
+  <svg class="corner corner-tr" viewBox="0 0 50 50" fill="none"><path d="M4 4L20 4L4 20Z" stroke="#c9962a" stroke-width="1" fill="rgba(201,150,42,0.12)"/><line x1="4" y1="4" x2="46" y2="4" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><line x1="4" y1="4" x2="4" y2="46" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><circle cx="4" cy="4" r="2.5" fill="#c9962a" opacity="0.7"/></svg>
+  <svg class="corner corner-bl" viewBox="0 0 50 50" fill="none"><path d="M4 4L20 4L4 20Z" stroke="#c9962a" stroke-width="1" fill="rgba(201,150,42,0.12)"/><line x1="4" y1="4" x2="46" y2="4" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><line x1="4" y1="4" x2="4" y2="46" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><circle cx="4" cy="4" r="2.5" fill="#c9962a" opacity="0.7"/></svg>
+  <svg class="corner corner-br" viewBox="0 0 50 50" fill="none"><path d="M4 4L20 4L4 20Z" stroke="#c9962a" stroke-width="1" fill="rgba(201,150,42,0.12)"/><line x1="4" y1="4" x2="46" y2="4" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><line x1="4" y1="4" x2="4" y2="46" stroke="#c9962a" stroke-width="1.5" opacity="0.45"/><circle cx="4" cy="4" r="2.5" fill="#c9962a" opacity="0.7"/></svg>
+
+  <div class="inner">
+    <header>
+      <div class="subtitle-banner">⚔ Tribal Wars · Scavenge Optimizer ⚔</div>
+      <h1>Coro's <em>Better Than Gemini's</em><br>Calculator</h1>
+      <div class="tagline">The only scavenge tool worthy of a true warlord</div>
+    </header>
+
+    <div class="section-title">⚙ Settings</div>
+    <div class="settings-row">
+      <div class="setting-group">
+        <label>⚗ Haul Research</label>
+        <select id="haulLevel">
+          <option value="1">No upgrades (×1.0)</option>
+          <option value="1.1">Improved Haul (×1.1)</option>
+          <option value="1.25">Advanced Haul (×1.25)</option>
+        </select>
+      </div>
+      <div class="setting-group">
+        <label>🌍 World Speed</label>
+        <select id="worldSpeed">
+          <option value="1">Speed ×1</option>
+          <option value="1.25">Speed ×1.25</option>
+          <option value="1.5">Speed ×1.5</option>
+          <option value="1.6" selected>Speed ×1.6</option>
+          <option value="1.8">Speed ×1.8</option>
+          <option value="2">Speed ×2</option>
+          <option value="3">Speed ×3</option>
+          <option value="4">Speed ×4</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title">🏰 Active Scavenge Slots</div>
+    <div class="slot-selector-grid" id="slotSelectorGrid"></div>
+
+    <div class="section-title">🎯 Strategy</div>
+    <div class="strategy-row">
+      <div class="strat-btn active" id="strat-balanced">
+        <span class="si">⚖️</span><span class="sn">Balanced</span>
+        <span class="sd">Max res/hour across all slots.</span>
+      </div>
+      <div class="strat-btn" id="strat-equal">
+        <span class="si">⏰</span><span class="sn">Equal Time</span>
+        <span class="sd">All slots finish together.</span>
+      </div>
+    </div>
+
+    <div class="section-title">⚔ Available Troops</div>
+    <div class="troops-grid" id="troopsGrid"></div>
+
+    <button class="btn-calculate" id="btnCalculate">⚔ &nbsp; Calculate &nbsp; ⚔</button>
+    <div class="warning-box" id="warningBox"></div>
+
+    <div id="results">
+      <div class="section-title" id="resultsTitle">📜 Optimal Distribution</div>
+      <div class="results-grid" id="slotsGrid"></div>
+      <div class="summary-box" id="summaryBox"></div>
+      <div id="compareBox"></div>
+      <div id="sensitivityBox"></div>
+      <div class="formula-note">⚗ Real in-game duration formula · Verified against official TW mechanics</div>
+    </div>
+
+    <footer>Forged in the fires of strategy &nbsp;·&nbsp; Gemini weeps &nbsp;·&nbsp; Coro reigns</footer>
+  </div>
+</div>
+
+<div class="popup-overlay" id="popupOverlay">
+  <div class="popup-box">
+    <span class="popup-icon">⏳</span>
+    <div class="popup-title">No Slots Fit That Time</div>
+    <div class="popup-body" id="popupBody"></div>
+    <div class="popup-suggestions" id="popupSuggestions"></div>
+    <button class="popup-dismiss" id="btnPopupDismiss">✕ &nbsp; Dismiss</button>
+  </div>
+</div>
+
+<script>
+// 
+//  REAL TW FORMULAS
+//  res/trip  = cap * ratio
+//  duration  = ((cap*100*ratio)^0.45 + 1800) * speed^(-0.55)  [seconds]
+// 
+
+var TROOPS = [
+  {id:'spear', name:'Spearman',      icon:'&#128481;', haul:25},
+  {id:'sword', name:'Swordsman',     icon:'&#9876;',  haul:15},
+  {id:'axe',   name:'Axeman',        icon:'&#129683;', haul:10},
+  {id:'archer',name:'Archer',        icon:'&#127993;', haul:10},
+  {id:'scout', name:'Scout',         icon:'&#128269;', haul:0},
+  {id:'lc',    name:'Light Cavalry', icon:'&#128014;', haul:80},
+  {id:'march', name:'Mtd. Archer',   icon:'&#127943;', haul:50},
+  {id:'hc',    name:'Heavy Cavalry', icon:'&#128737;', haul:50}
+];
+
+var BASE_SLOTS = [
+  {id:'LL',label:'LL \u2013 Lackadaisical',shortLabel:'LL',ratio:0.10,color:'#7c2d12',icon:'&#129956;',desc:'Lackadaisical'},
+  {id:'HH',label:'HH \u2013 Humble',       shortLabel:'HH',ratio:0.25,color:'#92400e',icon:'&#129408;',desc:'Humble'},
+  {id:'CC',label:'CC \u2013 Clever',        shortLabel:'CC',ratio:0.50,color:'#374151',icon:'&#128309;',desc:'Clever'},
+  {id:'GG',label:'GG \u2013 Great',         shortLabel:'GG',ratio:0.75,color:'#1a3a2a',icon:'&#127866;',desc:'Great'}
+];
+
+var activeSlotIds = {LL:true,HH:true,CC:true,GG:true};
+var currentStrategy = 'balanced';
+var isPhoneMode = false;
+
+//  All globally callable functions (must be outside DOMContentLoaded) 
+
+function toggleViewMode() {
+  isPhoneMode = !isPhoneMode;
+  document.body.classList.toggle('phone-mode', isPhoneMode);
+  try { localStorage.setItem('twViewMode', isPhoneMode ? 'phone' : 'pc'); } catch(e){}
+}
+
+function toggleSlot(id) {
+  activeSlotIds[id] = !activeSlotIds[id];
+  document.getElementById('slt_'+id).classList.toggle('active', activeSlotIds[id]);
+}
+
+function stepTroop(id, dir) {
+  var el = document.getElementById('troop_'+id);
+  var v = parseInt(el.value)||0;
+  var step = Math.abs(dir) * (v < 50 ? 1 : v < 200 ? 5 : v < 1000 ? 25 : 100);
+  el.value = Math.max(0, v + (dir > 0 ? step : -step));
+}
+
+function setStrategy(s) {
+  currentStrategy = s;
+  document.querySelectorAll('.strat-btn').forEach(function(b){b.classList.remove('active');});
+  document.getElementById('strat-'+s).classList.add('active');
+}
+
+function toggleTimeLimit() {
+  document.getElementById('timeFields').style.display =
+    document.getElementById('enableTimeLimit').checked ? 'flex' : 'none';
+}
+
+function toggleSens() {
+  var body=document.getElementById('sensBody');
+  var hdr=document.getElementById('sensHeader');
+  var open=body.classList.toggle('open');
+  hdr.classList.toggle('sens-open',open);
+}
+
+function closePopup(){document.getElementById('popupOverlay').classList.remove('open');}
+
+function applyTimeSuggestion(d){
+  var h=Math.floor(d/60),m=Math.ceil(d%60);
+  document.getElementById('enableTimeLimit').checked=true;
+  document.getElementById('timeFields').style.display='flex';
+  document.getElementById('limitHours').value=h;
+  document.getElementById('limitMins').value=m;
+  closePopup(); calculate();
+}
+
+//  Wait for DOM before building UI elements 
+document.addEventListener('DOMContentLoaded', function() {
+
+// View mode init
+(function initViewMode() {
+  var saved = ''; try { saved = localStorage.getItem('twViewMode')||''; } catch(e){}
+  if (saved === 'phone' || (!saved && window.innerWidth < 620)) {
+    isPhoneMode = true;
+    document.body.classList.add('phone-mode');
+  }
+})();
+
+// Wire static buttons
+document.getElementById('viewToggle').addEventListener('click', toggleViewMode);
+document.getElementById('btnCalculate').addEventListener('click', calculate);
+document.getElementById('btnPopupDismiss').addEventListener('click', closePopup);
+
+// Wire strategy buttons
+['balanced','equal'].forEach(function(s){
+  document.getElementById('strat-'+s).addEventListener('click', function(){ setStrategy(s); });
+});
+
+// Build slot toggles
+var slotGrid = document.getElementById('slotSelectorGrid');
+for (var i = 0; i < BASE_SLOTS.length; i++) {
+  (function(s){
+    var el = document.createElement('div');
+    el.className = 'slot-toggle active';
+    el.id = 'slt_'+s.id;
+    el.innerHTML =
+      '<div class="st-check">v</div>' +
+      '<span class="st-icon">'+s.icon+'</span>' +
+      '<span class="st-name">'+s.shortLabel+'</span>' +
+      '<span class="st-yield">'+Math.round(s.ratio*100)+'%</span>' +
+      '<span class="st-desc">'+s.desc+'</span>';
+    el.addEventListener('click', function(){ toggleSlot(s.id); });
+    slotGrid.appendChild(el);
+  })(BASE_SLOTS[i]);
+}
+
+// Build troop cards
+var troopGrid = document.getElementById('troopsGrid');
+for (var i = 0; i < TROOPS.length; i++) {
+  (function(t){
+    var cap = t.haul > 0 ? (t.haul+' res/unit') : 'No haul';
+    var card = document.createElement('div');
+    card.className = 'troop-card';
+    card.innerHTML =
+      '<div class="troop-header">' +
+        '<div class="troop-icon">'+t.icon+'</div>' +
+        '<div><div class="troop-name">'+t.name+'</div>' +
+        '<div class="troop-stat">'+cap+'</div></div>' +
+      '</div>' +
+      '<div class="troop-input-wrap">' +
+        '<button class="stepper-btn" type="button" data-id="'+t.id+'" data-dir="-1">-</button>' +
+        '<input class="troop-input" type="number" id="troop_'+t.id+'" min="0" placeholder="0" value="0">' +
+        '<button class="stepper-btn" type="button" data-id="'+t.id+'" data-dir="1">+</button>' +
+      '</div>';
+    // Clear 0 on focus, restore if left empty
+    var inp = card.querySelector('.troop-input');
+    if (!inp) { troopGrid.appendChild(card); return; } // guard: if innerHTML failed, still append card
+    inp.addEventListener('focus', function(){ if(this.value==='0') this.value=''; });
+    inp.addEventListener('blur',  function(){ if(this.value===''||this.value<0) this.value='0'; });
+    // Wire steppers via addEventListener
+    card.querySelectorAll('.stepper-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        stepTroop(this.dataset.id, parseInt(this.dataset.dir));
+      });
+    });
+    troopGrid.appendChild(card);
+  })(TROOPS[i]);
+}
+
+document.getElementById('popupOverlay').addEventListener('click', function(e){
+  if (e.target === this) closePopup();
+});
+
+}); // end DOMContentLoaded
+function fmt(min) {
+  if (min <= 0) return '0m';
+  var h=Math.floor(min/60), m=Math.round(min%60);
+  if (h===0) return m+'m';
+  if (m===0) return h+'h';
+  return h+'h '+m+'m';
+}
+
+//  TW formulas 
+function scavengeDurationMin(cap, ratio, ws) {
+  if (cap <= 0) return 0;
+  return (Math.pow(Math.pow(cap,2)*100*Math.pow(ratio,2),0.45)+1800)*Math.pow(ws,-0.55)/60;
+}
+function inverseDurationCap(targetMin, ratio, ws) {
+  var inner = (targetMin*60/Math.pow(ws,-0.55))-1800;
+  if (inner <= 0) return 0;
+  var cSq = Math.pow(inner,1/0.45)/(100*Math.pow(ratio,2));
+  return cSq > 0 ? Math.sqrt(cSq) : 0;
+}
+
+//  Optimisers 
+function optimise(totalCap, slots, ws, strategy) {
+  var n=slots.length, a=[];
+  for(var i=0;i<n;i++) a.push(1/n);
+  function score(f){
+    var rph=0,trip=0,lng=0;
+    for(var i=0;i<n;i++){var cap=totalCap*f[i],dh=scavengeDurationMin(cap,slots[i].ratio,ws)/60,t=cap*slots[i].ratio;rph+=dh>0?t/dh:0;trip+=t;if(dh>lng)lng=dh;}
+    if(strategy==='balanced') return rph;
+    if(strategy==='yield') return trip;
+    if(strategy==='speed') return lng>0?rph/lng:0;
+    return rph;
+  }
+  var step=0.5,improved=true,iters=0;
+  while(improved&&iters<3000){
+    improved=false;iters++;
+    for(var i=0;i<n-1;i++) for(var j=i+1;j<n;j++){
+      var cur=score(a),delta=a[i]*step;
+      var b1=a.slice();b1[i]=Math.max(0,a[i]-delta);b1[j]=Math.min(1,a[j]+delta);
+      var b2=a.slice();b2[j]=Math.max(0,a[j]-delta);b2[i]=Math.min(1,a[i]+delta);
+      var s1=score(b1),s2=score(b2);
+      if(s1>cur&&s1>=s2){a=b1;improved=true;}else if(s2>cur){a=b2;improved=true;}
+    }
+    if(!improved&&step>0.0005){step*=0.5;improved=true;}
+  }
+  return a;
+}
+
+function optimiseEqualTime(totalCap, slots, ws) {
+  var n=slots.length;
+  var lo=scavengeDurationMin(1,slots[0].ratio,ws);
+  var hi=scavengeDurationMin(totalCap,slots[n-1].ratio,ws)*2;
+  for(var k=0;k<100;k++){var mid=(lo+hi)/2,sum=0;for(var i=0;i<n;i++)sum+=inverseDurationCap(mid,slots[i].ratio,ws);if(sum<totalCap)lo=mid;else hi=mid;}
+  var T=(lo+hi)/2,fracs=[],tot=0;
+  for(var i=0;i<n;i++){var c=inverseDurationCap(T,slots[i].ratio,ws);fracs.push(c);tot+=c;}
+  for(var i=0;i<n;i++) fracs[i]/=tot;
+  return fracs;
+}
+
+function computeSummary(fracs, slots, totalCap, ws) {
+  var rph=0,trip=0,lng=0;
+  for(var i=0;i<slots.length;i++){var cap=totalCap*fracs[i],dur=scavengeDurationMin(cap,slots[i].ratio,ws),dh=dur/60,t=Math.round(cap*slots[i].ratio);trip+=t;if(dh>0)rph+=t/dh;if(dur>lng)lng=dur;}
+  var cycle=0;
+  for(var i=0;i<slots.length;i++){var cap=totalCap*fracs[i],dur=scavengeDurationMin(cap,slots[i].ratio,ws),t=Math.round(cap*slots[i].ratio);cycle+=t*Math.floor(lng/dur);}
+  return {rph:Math.round(rph),trip:trip,cycle:cycle,longest:lng};
+}
+
+//  Sensitivity table 
+function buildSensitivityTable(slotResults, longestDur) {
+  var delays = [0, 5, 10, 15, 20, 30, 45, 60];
+
+  // Find cliff points per slot
+  var cliffWarnings = [];
+  for (var i=0; i<slotResults.length; i++) {
+    var r = slotResults[i];
+    if (r.durMin >= longestDur - 0.5) continue;
+    var baseCount = Math.floor(longestDur / r.durMin);
+    for (var di=1; di<delays.length; di++) {
+      var countWithDelay = Math.floor((longestDur - delays[di]) / r.durMin);
+      if (countWithDelay < baseCount) {
+        cliffWarnings.push({
+          slot: r.slot.shortLabel,
+          delay: delays[di],
+          lost: baseCount - countWithDelay,
+          resLost: (baseCount - countWithDelay) * r.resPerTrip
+        });
+        break;
+      }
+    }
+  }
+
+  // Base (instant) total
+  var baseTotal = 0;
+  for (var i=0; i<slotResults.length; i++) baseTotal += slotResults[i].resPerTrip * Math.floor(longestDur / slotResults[i].durMin);
+
+  // Build rows
+  var rows = '';
+  for (var di=0; di<delays.length; di++) {
+    var delay = delays[di];
+    var cycleTotal = 0;
+    var sendsHtml = '';
+    var anyLost = false;
+    for (var i=0; i<slotResults.length; i++) {
+      var r = slotResults[i];
+      var base = Math.floor(longestDur / r.durMin);
+      // If user is late, they lose time on the FAST slots between their last return and now
+      var sends = delay === 0 ? base : Math.floor((longestDur - delay) / r.durMin);
+      if (sends < 1) sends = 1;
+      cycleTotal += r.resPerTrip * sends;
+      var lost = base - sends;
+      if (lost > 0) anyLost = true;
+      sendsHtml += '<div class="'+(lost>0?'warn':'ok')+'">'+r.slot.shortLabel+': '+sends+'x'+(lost>0?' ! -'+lost:'')+'</div>';
+    }
+    var diff = cycleTotal - baseTotal;
+    var diffCell = delay===0
+      ? '<span class="sens-ok">Ideal v</span>'
+      : (diff===0
+          ? '<span style="font-family:Cinzel,serif;font-size:10px;color:var(--ink-light)">No change</span>'
+          : '<span class="sens-loss">'+diff.toLocaleString()+'</span>');
+    rows += '<tr class="'+(delay===0?'best-row':'')+(anyLost?' cliff-row':'')+'">'+
+      '<td><span class="sens-val">'+(delay===0?'Instant':'&lt;= '+delay+'m')+'</span></td>'+
+      '<td><span class="sens-val">'+cycleTotal.toLocaleString()+'</span></td>'+
+      '<td>'+diffCell+'</td>'+
+      '<td><div class="sens-sends">'+sendsHtml+'</div></td>'+
+    '</tr>';
+  }
+
+  var cliffHtml = '';
+  if (cliffWarnings.length > 0) {
+    var msgs = cliffWarnings.map(function(c){
+      return '! Be back within <strong>'+c.delay+' min</strong> on '+c.slot+' or lose <strong>'+c.resLost.toLocaleString()+' res</strong>.';
+    }).join('<br>');
+    cliffHtml = '<div class="cliff-warning">'+msgs+'</div>';
+  } else {
+    cliffHtml = '<div class="cliff-warning" style="color:var(--wood);background:rgba(22,101,52,0.05);border-color:rgba(22,101,52,0.2)">v No re-sends at risk -- slots are close in duration. Relax!</div>';
+  }
+
+  return '<div class="sensitivity-panel">'+
+    '<div class="sensitivity-header" id="sensHeader">'+
+      '[T] Reaction Delay -- What If I\'m Late?'+
+      '<span class="toggle-arrow" id="sensArrow">v</span>'+
+    '</div>'+
+    '<div class="sensitivity-body" id="sensBody">'+
+      cliffHtml+
+      '<table class="sens-table">'+
+        '<thead><tr><th>Reaction</th><th>Cycle Res</th><th>vs Instant</th><th>Re-sends</th></tr></thead>'+
+        '<tbody>'+rows+'</tbody>'+
+      '</table>'+
+    '</div>'+
+  '</div>';
+}
+//  Main calculation 
+function calculate() {
+  var haulMult = parseFloat(document.getElementById('haulLevel').value);
+  var ws       = parseFloat(document.getElementById('worldSpeed').value);
+
+  var warn = document.getElementById('warningBox');
+  warn.style.display = 'none';
+
+  var eligible = BASE_SLOTS.filter(function(s){return activeSlotIds[s.id];});
+  if (!eligible.length) {
+    warn.style.display='block'; warn.textContent='! No scavenge slots selected.';
+    document.getElementById('results').style.display='none'; return;
+  }
+
+  var pool=[];
+  TROOPS.forEach(function(t){
+    var count=parseInt(document.getElementById('troop_'+t.id).value)||0;
+    if(count>0&&t.haul>0) pool.push({id:t.id,name:t.name,icon:t.icon,count:count,effectiveHaul:t.haul*haulMult});
+  });
+  if (!pool.length) {
+    warn.style.display='block'; warn.textContent='! No troops with carry capacity entered.';
+    document.getElementById('results').style.display='none'; return;
+  }
+
+  var totalCap=0;
+  pool.forEach(function(t){totalCap+=t.count*t.effectiveHaul;});
+
+  var fracs = currentStrategy==='equal'
+    ? optimiseEqualTime(totalCap,eligible,ws)
+    : optimise(totalCap,eligible,ws,'balanced');
+
+  // Assign troops
+  var n=eligible.length, asgn=[];
+  for(var si=0;si<n;si++){asgn.push([]);for(var ti=0;ti<pool.length;ti++) asgn[si].push(0);}
+  for(var ti=0;ti<pool.length;ti++){
+    var rem=pool[ti].count;
+    for(var si=0;si<n-1;si++){var num=Math.min(Math.round(pool[ti].count*fracs[si]),rem);asgn[si][ti]=num;rem-=num;}
+    asgn[n-1][ti]=rem;
+  }
+
+  // Slot results
+  var slotResults=[];
+  for(var si=0;si<n;si++){
+    var slot=eligible[si], slotCap=0, troops=[];
+    for(var ti=0;ti<pool.length;ti++){
+      if(asgn[si][ti]>0){troops.push({name:pool[ti].name,icon:pool[ti].icon,assigned:asgn[si][ti]});slotCap+=asgn[si][ti]*pool[ti].effectiveHaul;}
+    }
+    var dur=scavengeDurationMin(slotCap,slot.ratio,ws);
+    var trip=Math.round(slotCap*slot.ratio);
+    var rph=dur>0?Math.round(trip/(dur/60)):0;
+    var nt=0; for(var ti=0;ti<pool.length;ti++) nt+=asgn[si][ti];
+    slotResults.push({slot:slot,troops:troops,numTroops:nt,slotCap:Math.round(slotCap),resPerTrip:trip,resPerHour:rph,durMin:dur});
+  }
+
+  // Render slots
+  var stratLabel={balanced:'Balanced',speed:'Shortest Time',yield:'Highest Yield',equal:'Equal Time'};
+  document.getElementById('resultsTitle').textContent=' '+stratLabel[currentStrategy];
+
+  var longestDur=0;
+  slotResults.forEach(function(r){if(r.durMin>longestDur)longestDur=r.durMin;});
+
+  var grid=document.getElementById('slotsGrid');
+  grid.innerHTML='';
+
+  slotResults.forEach(function(r){
+    var times=Math.max(1, Math.floor(longestDur/r.durMin)); // Math.max(1) guards float drift
+    var isRef=r.durMin>=longestDur-0.5;
+
+    // Resource split: TW returns equal 1/3 each of wood, clay, iron
+    var each      = Math.floor(r.resPerTrip / 3);
+    var eachH     = Math.floor(r.resPerHour / 3);
+    var splitTrip = '&#129717; '+each.toLocaleString()+'&nbsp; &#129521; '+each.toLocaleString()+'&nbsp; &#9881; '+each.toLocaleString();
+    var splitHour = '&#129717; '+eachH.toLocaleString()+'&nbsp; &#129521; '+eachH.toLocaleString()+'&nbsp; &#9881; '+eachH.toLocaleString();
+
+    var cycleRes  = r.resPerTrip * times;
+    var eachCycle = Math.floor(cycleRes / 3);
+    var badge=isRef
+      ? '<div class="resend-badge resend-ref">[T] Reference slot</div>'
+      : '<div class="resend-badge"> Send <strong>'+times+'x</strong>'+(times>1?' (+' +(times-1)+' re-send'+(times>2?'s':'')+')'  :'')+'</div>'+
+        '<div class="resend-total">~ '+cycleRes.toLocaleString()+' res total</div>'+
+        '<div class="resend-split">&#129717; '+eachCycle.toLocaleString()+'&nbsp; &#129521; '+eachCycle.toLocaleString()+'&nbsp; &#9881; '+eachCycle.toLocaleString()+'</div>';
+
+    var lines = r.troops.length===0
+      ? '<div style="font-style:italic;opacity:0.5;font-size:11px;text-align:center">No troops</div>'
+      : r.troops.map(function(t){return '<div class="troop-line"><span class="troop-icon-sm">'+t.icon+'</span><span class="troop-count">'+t.assigned.toLocaleString()+'</span></div>';}).join('');
+
+    var cardEl = document.createElement('div');
+    cardEl.className = 'slot-card';
+    cardEl.style.borderTopColor = r.slot.color;
+    cardEl.innerHTML =
+      '<div class="slot-title">'+r.slot.shortLabel+'  '+Math.round(r.slot.ratio*100)+'%'+
+        '<span class="slot-badge" style="background:'+r.slot.color+'">'+r.slot.icon+'</span>'+
+      '</div>'+
+      '<div class="slot-troops">'+lines+'</div>'+
+      '<div class="slot-stats">'+
+        '<div class="stat-line"><span>Duration</span><span class="stat-val">'+fmt(r.durMin)+'</span></div>'+
+        '<div class="stat-line"><span>Capacity</span><span class="stat-val">'+r.slotCap.toLocaleString()+'</span></div>'+
+        '<div class="stat-line stat-line-split"><span>Res / Trip</span><span class="stat-val">'+r.resPerTrip.toLocaleString()+'</span></div>'+
+        '<div class="res-split-row">'+splitTrip+'</div>'+
+        '<div class="stat-line stat-line-split"><span>Res / Hour</span><span class="stat-val hi">'+r.resPerHour.toLocaleString()+'</span></div>'+
+        '<div class="res-split-row">'+splitHour+'</div>'+
+      '</div>'+badge;
+    grid.appendChild(cardEl);
+  });
+
+  // Summary
+  var totRPH=0,totCycle=0,totTroops=0,longest=0;
+  slotResults.forEach(function(r){
+    totRPH+=r.resPerHour; totTroops+=r.numTroops;
+    if(r.durMin>longest)longest=r.durMin;
+    totCycle+=r.resPerTrip*Math.max(1,Math.floor(longestDur/r.durMin));
+  });
+  var unused=0; pool.forEach(function(t){unused+=t.count;}); unused-=totTroops;
+
+  document.getElementById('summaryBox').innerHTML=
+    '<div class="summary-title">X Total Scavenge Summary X</div>'+
+    '<div class="summary-stats">'+
+      '<div><div class="ss-label">Troops Sent</div><div class="ss-val">'+totTroops.toLocaleString()+'</div>'+
+        (unused>0?'<div style="font-size:9px;color:#a0785a;margin-top:2px">+'+unused+' unused</div>':'')+
+      '</div>'+
+      '<div><div class="ss-label">Res / Hour</div><div class="ss-val c1">'+totRPH.toLocaleString()+'</div></div>'+
+      '<div><div class="ss-label">Full Cycle Res</div><div class="ss-val c2">'+totCycle.toLocaleString()+'</div>'+
+        '<div style="font-size:9px;color:#5c3a1e;margin-top:2px">all re-sends</div></div>'+
+      '<div><div class="ss-label">Cycle Duration</div><div class="ss-val c3">'+fmt(longest)+'</div></div>'+
+    '</div>';
+
+  // Comparison -- Balanced vs Equal Time only
+  var fB=optimise(totalCap,eligible,ws,'balanced');
+  var fE=optimiseEqualTime(totalCap,eligible,ws);
+  var sB=computeSummary(fB,eligible,totalCap,ws);
+  var sE=computeSummary(fE,eligible,totalCap,ws);
+
+  function diff(d){
+    if(Math.abs(d)<1) return '<span class="compare-diff neu">= same</span>';
+    return '<span class="compare-diff '+(d>0?'pos':'neg')+'">'+(d>0?'+':'')+d.toLocaleString()+'</span>';
+  }
+
+  var cmp='<div class="compare-panel">'+
+    '<div class="compare-title"> Balanced vs Equal Time</div>'+
+    '<div class="compare-row">'+
+      '<span class="compare-label">Balanced</span>'+
+      '<span style="font-family:Cinzel,serif;font-size:11px;color:#2c1a0e">'+sB.rph.toLocaleString()+' res/hr</span>'+
+      '<span style="font-family:Cinzel,serif;font-size:11px;color:#2c1a0e">'+sB.cycle.toLocaleString()+' cycle</span>'+
+    '</div>'+
+    '<div class="compare-row">'+
+      '<span class="compare-label">Equal Time</span>'+
+      '<span style="font-family:Cinzel,serif;font-size:11px;color:#2c1a0e">'+sE.rph.toLocaleString()+' res/hr</span>'+
+      '<span style="font-family:Cinzel,serif;font-size:11px;color:#2c1a0e">'+sE.cycle.toLocaleString()+' cycle</span>'+
+    '</div>'+
+    '<div class="compare-row">'+
+      '<span class="compare-label">Difference</span>'+
+      diff(currentStrategy==='equal'?sE.rph-sB.rph:sB.rph-sE.rph)+
+      diff(currentStrategy==='equal'?sE.cycle-sB.cycle:sB.cycle-sE.cycle)+
+    '</div>'+
+    '<div class="equal-time-note">'+(currentStrategy==='equal'?' Equal Time active -- positive = Equal Time wins':' Balanced active -- positive = Balanced wins')+'</div>'+
+  '</div>';
+  document.getElementById('compareBox').innerHTML=cmp;
+
+  // Sensitivity table
+  document.getElementById('sensitivityBox').innerHTML=buildSensitivityTable(slotResults,longestDur);
+  // Wire sensitivity header after injection
+  document.getElementById('sensHeader').addEventListener('click', toggleSens);
+
+  var res=document.getElementById('results');
+  res.style.display='block';
+  res.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+
+</script>
+</body>
+</html>
